@@ -39,8 +39,6 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
     Serial.println("Client connected");
   } else if (type == WS_EVT_DISCONNECT) {
     Serial.println("Client disconnected");
-  } else if (type == WS_EVT_DATA) {
-    // Menangani data masuk dari klien (jika diperlukan)
   }
 }
 
@@ -85,57 +83,106 @@ void setup() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", R"rawliteral(
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Ultrasonic Radar</title>
-  <style>
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-      background-color: black;
-    }
-    canvas { 
-      background-color: black; 
-      display: block;
-      margin: 0 auto;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultrasonic Radar</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: black;
+            color: green;
+            font-family: Arial, sans-serif;
+        }
+        #radar {
+            background-color: black;
+            width: 100%;
+            max-width: 500px;
+            height: auto;
+            border-radius: 50%;
+            box-shadow: 0 0 20px green;
+        }
+        .info {
+            margin-top: 20px;
+            color: green;
+        }
+        .info span {
+            margin-right: 20px;
+        }
+        @media (max-width: 768px) {
+            #radar {
+                max-width: 300px;
+            }
+        }
+    </style>
 </head>
 <body>
-  <canvas id="radar" width="300" height="300"></canvas>
-  <script>
-    const canvas = document.getElementById('radar');
-    const ctx = canvas.getContext('2d');
-    
-    const drawRadar = (angle, distance) => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw radar circle
-      ctx.beginPath();
-      ctx.arc(150, 150, 140, 0, 2 * Math.PI);
-      ctx.strokeStyle = 'green';
-      ctx.stroke();
-      
-      // Draw radar line
-      const x = 150 + distance * Math.cos(angle * Math.PI / 180);
-      const y = 150 - distance * Math.sin(angle * Math.PI / 180);
-      ctx.beginPath();
-      ctx.moveTo(150, 150);
-      ctx.lineTo(x, y);
-      ctx.strokeStyle = 'red';
-      ctx.stroke();
-    };
+    <canvas id="radar" width="500" height="500"></canvas>
+    <div class="info">
+        <span id="degrees">Degrees: 0</span>
+        <span id="distance">Distance: 0</span>
+    </div>
 
-    const ws = new WebSocket(`ws://${window.location.host}/ws`);
+    <script>
+        const canvas = document.getElementById('radar');
+        const ctx = canvas.getContext('2d');
+        const radarCenter = canvas.width / 2;
+        const radarRadius = radarCenter;
 
-    ws.onmessage = (event) => {
-      const [angle, distance] = event.data.split(',');
-      drawRadar(Number(angle), Number(distance));
-    };
-  </script>
+        function drawRadar(angle, distance) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw radar background circles
+            ctx.strokeStyle = 'green';
+            ctx.lineWidth = 2;
+            for (let i = 1; i <= 4; i++) {
+                ctx.beginPath();
+                ctx.arc(radarCenter, radarCenter, radarRadius * i / 4, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+
+            // Draw radar lines
+            for (let i = 0; i < 360; i += 30) {
+                const x = radarCenter + radarRadius * Math.cos(i * Math.PI / 180);
+                const y = radarCenter + radarRadius * Math.sin(i * Math.PI / 180);
+                ctx.beginPath();
+                ctx.moveTo(radarCenter, radarCenter);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            }
+
+            // Draw radar sweep
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+            ctx.beginPath();
+            ctx.moveTo(radarCenter, radarCenter);
+            ctx.arc(radarCenter, radarCenter, radarRadius, (angle - 10) * Math.PI / 180, angle * Math.PI / 180);
+            ctx.lineTo(radarCenter, radarCenter);
+            ctx.fill();
+
+            // Draw detected point
+            const x = radarCenter + distance * radarRadius / 100 * Math.cos(angle * Math.PI / 180);
+            const y = radarCenter + distance * radarRadius / 100 * Math.sin(angle * Math.PI / 180);
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        // WebSocket connection
+        const ws = new WebSocket(`ws://${window.location.host}/ws`);
+        ws.onmessage = (event) => {
+            const [angle, distance] = event.data.split(',');
+            drawRadar(Number(angle), Number(distance));
+            document.getElementById('degrees').innerText = `Degrees: ${angle}`;
+            document.getElementById('distance').innerText = `Distance: ${Math.round(distance)}`;
+        };
+    </script>
 </body>
 </html>
     )rawliteral");
